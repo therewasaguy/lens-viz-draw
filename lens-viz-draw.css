@@ -1,0 +1,19 @@
+:host {
+  display: inline-block;
+  color: black;
+  width: 300px;
+  height: 300px;
+}
+
+.xLabel {
+  font-size: 0.7em;
+  font-weight: 300;
+}
+.xAxis path {
+  fill: none;
+  stroke-width: 2px;
+}
+
+.tip {
+  font-weight: 400;
+}

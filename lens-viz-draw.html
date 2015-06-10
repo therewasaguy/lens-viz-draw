@@ -1,0 +1,582 @@
+<link rel='import' href='../polymer/polymer.html'> 
+<link rel='import' href='../th-theme/th-theme.html'> 
+
+<link rel='import' href='../th-d3-chart/th-d3-chart.html'> 
+
+<!--
+A line chart that the user draws to guess the value.
+
+##### Example
+
+    <lens-viz-draw></lens-viz-draw>
+
+@element lens-viz-draw
+@blurb A line chart that the user draws to guess the value.
+@status alpha
+@author Lenses team
+@homepage http://lenses.github.io/lens-viz-draw
+-->
+
+<polymer-element name='lens-viz-draw' extends='th-d3-chart'  attributes='input fillArea valuePosition tooltips animateMarker'>
+  <template>
+    <core-style ref='theme'></core-style>
+    <link rel='stylesheet' href='lens-viz-draw.css'>
+
+    <svg id='chart'></svg> 
+
+  </template>
+  <script>
+    Polymer('lens-viz-draw', {
+
+
+      chartData: [
+        {'label': 'Q1 2014', 'value': 104, 'display_value': '$104'},
+        {'label': 'Q2 2014', 'value': 107, 'display_value': '$107'},
+        {'label': 'Q3 2014', 'value': 110, 'display_value': '$110'},
+        {'label': 'Q4 2014', 'value': 112, 'display_value': '$112'},
+        {'label': 'Q1 2016', 'value': 104, 'display_value': '$104'},
+      ],
+      /**
+       * fillArea determines whether the area under the line is filled or not
+       * @type {Boolean}
+       */
+      fillArea: false,
+      /**
+       * valuePosition can be displayed on the 'left' or 'right' of the chart
+       * @type {String}
+       */
+      valuePosition: 'left',
+      /**
+       * tooltips will remove the large value in the background and show small values above each point
+       * @type {Boolean}
+       */
+      tooltips: false,
+      /**
+       * animateMarker slides the marker through the line, if true
+       * @type {Boolean}
+       */
+      animateMarker: true,
+
+      // drawing vars inspired by 
+      // http://bl.ocks.org/cloudshapes/5661984
+      svg: undefined,
+      ptdata: [],
+      _pointsToDraw: [],
+
+      // how many divisions - based on input.length
+      granularity: 4,
+
+
+      init: function() {
+        var self = this;
+        self.input = self.input.length > 0 ? self.input : self.chartData;
+
+        // granularity = data point length
+        self.granularity = self.input.length;
+
+        // Set up dimensions
+        self.dims = self.setupDimensions(self);
+
+        self.dims.height += self.dims.margin.bottom + self.dims.margin.top;
+        self.dims.margin.right = 5; 
+        self.dims.margin.left = 25;
+        self.dims.width -= self.dims.margin.left + self.dims.margin.right;
+
+        self._scaleBuilder();
+
+        // Setup elements and sizes
+        self._setupElements();
+        self._setElementSizes();
+        // self._setupTouchAnimate();
+        self._setupDrawing();
+
+        self._populatePtdata();
+      },
+
+      // full with null points divided along granularity axis
+      _populatePtdata: function() {
+        var self = this;
+        var distBetwPoints = (self.dims.width - self.dims.margin.right - self.dims.margin.left) / (self.granularity - 1);
+
+        for (var i = 0; i < self.granularity; i++) {
+          var x = i*distBetwPoints;
+          var y = null;
+          self.ptdata.push([x, y]);
+        }
+      },
+
+      /**
+       *  Scale dimensions based on input
+       */
+      _scaleBuilder: function(){
+        var self = this;
+
+        // Find highest and lowest values
+        self.maxValue = self.yAxisMax != '' && (!isNaN(parseInt(self.yAxisMax))) ? self.yAxisMax : self.getBoundaryValue(self, 'value', d3.max);
+
+        self.minValue = self.yAxisMin != '' && (!isNaN(parseInt(self.yAxisMin))) ? self.yAxisMin : self.getBoundaryValue(self, 'value', d3.min);
+
+        // Set y-scale
+        self.y = d3.scale.linear().domain([self.minValue, self.maxValue]).range([self.dims.margin.left, 
+                (self.dims.height-(self.dims.margin.top + self.dims.margin.bottom))]);
+        
+        // Set x-scale
+        self.x = d3.scale.ordinal().rangePoints([self.dims.margin.left, self.dims.width], 0);
+        self.x.domain(self.input.map(function(d,i){return d.label}));
+      },
+
+      /**
+       * _setupElements creates all the elements required for the line graph, unstyled
+       * @return {[type]} [description]
+       */
+      _setupElements: function(){
+        var self = this,
+            width = self.dims.width,
+            height = self.dims.height,
+            y = self.y,
+            x = self.x,
+            g = self.g, 
+            data = self.input;
+
+        self.currentPos = { 
+          value: data[0].valueDisplayed,
+          label: data[0].label,
+          // date: data[0].date,
+          index: 0
+        };
+
+        // Create chart container
+        self.svg = d3.select(self.$.chart);
+        var g = self.svg.append('g');
+        self.g = g;
+
+        self.xAxis = g.append('g').attr('class', 'axis xAxis fill-foreground');
+
+        // Add large display value
+        self.displayValue = g.append('g')
+          .selectAll('.displayVal')
+          .data([self.currentPos]).enter()
+          .append('text')
+          .attr('class', 'fill-foreground displayVal');
+          
+        // Fill area path
+        if(self.fillArea){
+          self.areaPath = g.append('path');
+        }
+
+        // Line path
+        self.linePath = g.append('path').data(data)
+            .attr('class', 'line data0 no-fill');
+
+        // Datapoints
+        self.datapoints = g.selectAll('.datapoint')
+          .data(data)
+          .enter().append('g')
+          .attr('class', 'datapoint data0');
+          
+        self.circles = self.datapoints
+          .append('circle')
+          .attr('class', 'circle data0');
+
+        self.circleAreas = self.datapoints
+          .append('circle')
+          .attr('class', 'circleArea');
+          
+        // Marker
+        self.marker = self.g.append('circle')
+          .data([self.currentPos])
+          .attr('class', 'marker stroke-foreground data0');
+          
+        // Tooltips 
+        self.tips = g.selectAll('.tip')
+          .data(data)
+          .enter().append('text')
+          .attr('class', 'tip label fill-foreground')
+          .attr('text-anchor', 'middle')
+          .attr('opacity', function(){return self.tooltips ? 1 : 0})
+          .style('fill', self.textColor);
+
+      },
+      /**
+       * _setElementSizes styles and sets starting position of all the elements in the chart
+       */
+      _setElementSizes: function(){
+        var self = this,
+            width = self.dims.width,
+            height = self.dims.height,
+            y = self.y,
+            x = self.x,
+            data = self.chartData,
+            valueSize = self.valueSize || Math.min(width, height)/3;
+
+          //TODO: format display values / adjust margins
+          
+          // Set size of svg
+          self.svg
+            .attr('width', self.dims.width+ self.dims.margin.right + self.dims.margin.left) 
+            .attr('height', self.dims.height); 
+
+          // Position g
+          self.g
+            .attr('transform', 'translate(0,'+ (self.dims.height-self.dims.margin.top) +')');
+
+        // Create x-axis
+        var xAxis = d3.svg.axis()
+          .scale(x)
+          .tickSize(0)
+          .orient('bottom');
+
+          self.xAxis
+            .call(xAxis).style('stroke', self.textColor)
+            .style('stroke', self.textColor);
+
+          // Create x-labels
+          self.xLabels = self.g.selectAll('.axis')
+            .selectAll('text')
+            .attr('class', 'label no-stroke xLabel')
+            .attr('y', 5)
+            .style('fill', self.textColor);
+
+          // Set display value and it's position/size
+          self.displayValue
+            .attr('class', 'fill-foreground displayVal')
+            .attr('opacity', function(){
+              return self.tooltips ? 0 : 0.7; // hide the large number if all values are selected
+            })
+            .style('fill', self.textColor)
+            .style('stroke', self.textColor) // this can start as 0 and fade in after datapoint and joystick appear
+            .attr('text-anchor', function(){ return self.valuePosition === 'left' ? 'start' : 'end'; })
+            .attr('x', function(){ return self.valuePosition === 'left' ? self.dims.margin.left : (width-self.dims.margin.left); })
+            .attr('y', -(height - valueSize - self.dims.margin.top )) 
+            .attr('font-size', valueSize) 
+
+            .text(function(d){
+              if (!d.value) {
+              } else {
+                return self.valPrefix + d.value.toFixed(self.decimalPlaces) + self.valSuffix;
+              }
+            });
+          
+          // Line data, starting state (raise style animation)
+          self.startingLine = d3.svg.line()
+            .x(function(d,i) { return x(d.label); })
+            .y(0).interpolate(self.lineStyle);
+
+          // Line data, ending state (raise style animation)
+          self.line = d3.svg.line()
+            .x(function(d,i) { return x(d.label); })
+            .y(function(d) { return -y(d.value); })
+            .interpolate(self.lineStyle);
+
+          // Data for fill area, starting state (raise style animation)
+          self.areaDataStart = d3.svg.area()
+            .x(function(d,i) { return x(d.label); })
+            .y1(0).interpolate(self.lineStyle);
+
+          // Data for fill area, ending state (raise style animation)
+          self.areaData = d3.svg.area()
+            .x(function(d,i) { return x(d.label); })
+            .y1(function(d) { return -y(d.value); })
+            .interpolate(self.lineStyle);
+
+          // Create line path with line data  
+          self.linePath
+            // .data(data)
+            .attr('class', 'line data0 no-fill')
+            .attr('stroke-width', '3')
+            .style('fill', 'none')
+            .attr('d', function(){ return self.fillArea ? self.line(data) : self.startingLine(data);})
+            .attr('opacity', function(){ return self.fillArea ? 0 : 1;})
+            .style('stroke', self.color);
+
+          // Starting fill area path
+          if (self.fillArea){   
+            self.areaPath 
+              .datum(data)
+              .attr('class', 'area data0')
+              .attr('opacity', 0)
+              .attr('d', self.areaDataStart)
+              .style('fill', self.color)
+              .style('stroke', self.color);     
+          }
+
+          // Set circles position
+          self.datapoints
+            .attr('class', 'datapoint data0')
+            .attr('cx', function(d,i) { return  x(d.label); })
+            .attr('cy', function(d) { return -1 * y(d.value); });
+
+          self.circles
+            .attr('class', 'circle data0')
+            .attr('r', 0)
+            .style('fill', self.color)
+            .style('stroke', self.color)
+            .attr('cx', function(d,i) { return  x(d.label); })
+            .attr('cy', function(d) { return -1 * y(d.value); });
+
+          self.circleAreas
+            .attr('class', 'circleArea')
+            .attr('r', 25)
+            .attr('opacity', 0)
+            .attr('cx', function(d,i) { return  x(d.label); })
+            .attr('cy', function(d) { return -1 * y(d.value); });
+
+          self.marker
+            .attr('r', 0)
+            .attr('class', 'marker stroke-foreground data0')
+            .attr('stroke-width', 3)
+            .attr('stroke-opacity', 1)
+            .style('fill', self.color)
+            .style('stroke', self.textColor)
+            .attr('transform', function(d,i){
+              return 'translate(' + x(d.label) +','+ -y(d.value || 0)+ ')'; 
+            })
+            .on('down', function(data){
+              self.circles
+                .attr('stroke-width', function(d,i){ return i === data.index-1 ? 3 : 1})
+                .classed('stroke-foreground', function(d,i){ return i === data.index-1 ? true : false});
+              self._animateMarker = false;
+            })
+            .on('up', this.remove);
+
+      },
+
+
+      // set up drawing
+      _setupDrawing: function() {
+        var self = this;
+
+        self.drawnLine = d3.svg.line()
+          .interpolate('basis')
+          .x(function(d, i) { return d[0]; })
+          .y(function(d, i) { return d[1]; });
+
+        self.drawnPath = self.svg.append("g")
+          .append("path");
+
+        self.svg.on('mousedown', function(e) {self._startDraw()});
+        self.svg.on('mouseup', function(e) {self._endDraw()});
+        self.svg.on('mouseleave', function(e) {self._endDraw()});
+
+      },
+
+      _startDraw: function() {
+        var self = this;
+        self._drawing = true;
+        self._drawPoints();
+        self.svg.on('mousemove', self._drawPoints.bind(self));
+
+      },
+
+      _endDraw: function() {
+        var self = this;
+        self._drawing = false;
+        self.svg.on('mousemove', '');
+      },
+
+      _drawPoints: function() {
+        var self = this;
+        var pt = d3.mouse(self);
+
+        function map(n, start1, stop1, start2, stop2) {
+          return (n - start1) / (stop1 - start1) * (stop2 - start2) + start2;
+        }
+
+        var pointIndex = Math.round( map(pt[0], 0, self.dims.width, 0, self.granularity - 1) );
+        var distBetwPoints = (self.dims.width - self.dims.margin.right - self.dims.margin.left) / (self.granularity - 1);
+        var xPos = pointIndex * distBetwPoints + self.dims.margin.left;
+        var newPoint = [xPos, pt[1] - self.dims.margin.top];
+
+        self.ptdata[pointIndex] = newPoint;
+
+        var pts = [];
+        for (var i = 0; i < self.ptdata.length; i++ ) {
+          if (self.ptdata[i][1]) {
+            pts.push(self.ptdata[i]);
+          }
+        }
+
+        self._pointsToDraw = pts;
+
+        // self.drawnPath.remove();
+
+        self.drawnPath = self.svg.append("g")
+          .selectAll('.pathPoints')
+          .data([self._pointsToDraw])
+          .enter()
+          .append("path")
+            .attr('class', 'line data0 no-fill')
+            .attr("d", self.drawnLine)
+            .style('stroke', 'orange')
+            .attr('stroke-width', '3')
+            .attr("fill", "none")
+          .exit().remove();
+
+        //
+        if (self.guesspoints) {
+          self.guesspoints.remove();
+        }
+
+        self.guesspoints = self.svg.append('g')
+          .selectAll('.guesspoints')
+          .data(self._pointsToDraw)
+          .enter().append('circle')
+            .attr("class", '.guesspoints')
+            .attr("r", 5)
+            .attr("fill", 'orange')
+            .attr("cx", function(d, i) { console.log(d); return d[0] })
+            .attr("cy", function(d, i) { return d[1] });
+          // .exit();
+          // .attr("cx", self._pointsToDraw[0][0])
+          // .attr("cy", self._pointsToDraw[0][1]);
+
+
+        self.drawnPath.attr("d", function(d) { return self.drawnLine(d);})
+
+
+
+        // if all the points have been drawn, animate and calculate distance / score
+        if (self._pointsToDraw.length === self.granularity) {
+          self.animate();
+
+          var dataYValues = [];
+
+          // determine Y values based on each circle's cy so that we can calculate distance
+          for (var j = 0; j < self.circles[0].length; j++) {
+            var cy = self.circles[0][j].getAttribute('cy');
+            dataYValues.push([self._pointsToDraw[j][0], self.dims.height - self.dims.margin.bottom +self.dims.margin.top + Number(cy) ]);
+          }
+
+          self._calculateDistanceBetweenCurves(self._pointsToDraw, dataYValues);
+        }
+
+      },
+
+      /**
+       * updateData is called when chartData changes and updates the element sizes and scales accordingly
+       */
+      updateData: function(){
+        var self = this,
+            data = self.chartData;
+
+        // Adjust scales
+        self._scaleBuilder();
+
+        // Update current position
+        self._resetCurrentPosition();
+
+        // Select elements
+        self.xLabels = self.g.selectAll('.xLabel');
+        self.linePath = self.g.selectAll('path.line').data(data);
+        self.datapoints = self.g.selectAll('.datapoint').data(data);
+        self.circles = self.g.selectAll('.circle').data(data);
+        self.tips = self.g.selectAll('.tip').data(data);
+        self.circleAreas = self.g.selectAll('.circleArea').data(data);
+        self.xAxis = self.g.selectAll('path.axis').data(data);
+        self.displayValue = self.g.selectAll('.displayVal').data([self.currentPos]);
+        
+        // Add any new datapoints
+        self.xLabels.enter().append('text')
+          .attr('class', 'xLabel axis');
+        self.datapoints
+          .enter().append('g');
+        self.circles
+          .enter().append('circle');
+        self.circleAreas
+          .enter().append('circle');
+        self.tips
+          .enter().append('text');
+
+        // Remove old marker and add a new one (so it is always on top)
+        self.marker.remove();
+        self.marker = self.g.append('circle')
+          .data([self.currentPos])
+          .attr('class', 'marker stroke-foreground data0');
+
+        // Remove any extra datapoints
+        self.xLabels.exit().remove();
+        self.datapoints.exit().remove();
+        self.circles.exit().remove();
+        self.circleAreas.exit().remove();
+        self.tips.exit().remove();
+
+        // Reset styles and animations
+        self._setElementSizes();
+        // self._setupTouchAnimate();
+        // self._moveMarker();
+        self.animate();
+
+      },
+
+      /**
+       * animate transitions the element's to their final states and initiates the marker animation
+       */
+      animate: function(){
+        var self = this,
+            g = self.g, 
+            svg = self.svg,
+            data = self.chartData,
+            x = self.x, 
+            y = self.y,
+            startingLine = self.startingLine;
+        self._animateMarker = self.animateMarker ? true : false;
+
+        // Fade in fillArea if option is chosen
+        if (self.fillArea){ 
+          self.areaPath  
+              .transition().duration(900)
+              .ease('linear')
+              .attr('stroke-dashoffset', 0)
+            .attr('d', self.areaData)
+            .attr('opacity', 0.7);
+        }
+
+        // Raise line
+        self.linePath
+          .transition()
+            .duration(function(){ return self.fillArea ? 5000 : 900;})
+            .attr('d', self.line(data))
+            .attr('opacity', 1);
+
+        // Show datapoints
+        self.circles
+          .transition().delay(650).duration(500)
+            .attr('r', 5);
+
+        if(self.tooltips){
+          // Show tooltips
+          self._showTooltips();
+        } else {
+          // Show marker and animate
+          self.marker
+            .transition().delay(750).duration(500)
+              .attr('r', 5)
+              .each('end', 0);
+        }
+
+      },
+
+      inputChanged: function() {
+        var self = this;
+        self.chartData = self.input;
+        self._scaleBuilder();
+      },
+
+      _calculateDistanceBetweenCurves: function(a, b) {
+        var dist = 0;
+
+        function distance(p1, p2) {
+          return Math.sqrt(Math.pow(p1[0]-p2[0], 2) + Math.pow(p1[1]-p2[1], 2));
+        }
+
+        for (var i = 0; i < a.length; i++) {
+          dist += distance(a[i], b[i]);
+        }
+
+        console.log('distance: ' + dist);
+
+      }
+
+    });
+  </script>
+</polymer-element>

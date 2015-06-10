@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lens-viz-draw</title>
+
+  <script src="../../webcomponentsjs/webcomponents.js"></script>
+  <script src="../../web-component-tester/browser.js"></script>
+
+  <!-- Step 1: import the element to test -->
+  <link rel="import" href="../lens-viz-draw.html">
+
+</head>
+<body>
+
+  <lens-viz-draw id="component"></lens-viz-draw>
+
+  <script>
+    var should = chai.should();
+    var component = document.getElementById("component");
+
+    // some input data
+    var input = [
+        {"label": "Q1 2014", "value": 96, "display_value": "$104"},
+        {"label": "Q2 2014", "value": 107, "display_value": "$107"},
+        {"label": "Q3 2014", "value": 110, "display_value": "$110"},
+        {"label": "Q4 2014", "value": 114, "display_value": "$112"}
+      ];
+
+    suite("<lens-viz-draw>", function() {
+
+      test("component can be created as an object", function(done) {
+        should.exist(component);
+        done();
+      });
+
+      test("accepts input", function(done) {
+        component.input[3].value.should.eql(112);
+
+        // change input
+        component.input = input;
+
+        flush(function() {
+          component.input.should.eql(input);
+          component.input[3].value.should.eql(input[3].value);
+          done();
+        });
+      });
+
+      test("element size can scale", function(done) {
+        flush(function() {
+          component.maxValue.should.eql(114);
+          component.minValue.should.eql(96);
+          done();
+        });
+      });
+
+      // repeat as needed
+      test("change an argument, fire outputReady, output new result", function(done) {
+
+        // myEl.removeEventListener("th-output-ready", callback);
+        // callback = function(e) {
+        //   // // check that the argument has been changed
+        //   // myEl.splitCol.should.equal(splitCol);
+
+        //   // // check that the output has been changed
+        //   // var player = myEl.output[0].split1;
+        //   // var pos = myEl.output[0].split2;
+        //   // player.should.equal("Marshawn Lynch");
+        //   // pos.should.equal("RB");
+        // };
+        // myEl.addEventListener("th-output-ready", callback);
+
+        // // change an argument
+        // myEl.splitCol = splitCol;
+
+        // fire th-output-ready event
+        flush(function() {
+          done();
+        });
+      });
+
+    });
+
+  </script>
+
+</body>
+</html>
