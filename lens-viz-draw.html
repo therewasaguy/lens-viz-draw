@@ -415,6 +415,7 @@ A line chart that the user draws to guess the value.
 
         self._pointsToDraw = pts;
 
+        // clear drawnPath before redrawing it
         self.drawnPath.remove();
 
         self.drawnPath = self.drawArea
@@ -428,7 +429,7 @@ A line chart that the user draws to guess the value.
             .attr('stroke-width', '3')
             .attr('fill', 'none')
 
-        //
+        // clear guesspoints
         if (self.guesspoints) {
           self.guesspoints.remove();
         }
@@ -448,20 +449,10 @@ A line chart that the user draws to guess the value.
 
 
         // if all the points have been drawn, animate and calculate distance / score
-        if (self._pointsToDraw.length === self.granularity-1) {
+        if (self._pointsToDraw.length === self.granularity) {
           self.animate();
 
-          var dataYValues = [];
-
-          // determine Y values based on each circle's cy so that we can calculate distance
-          // for (var j = 0; j < self.circles[0].length; j++) {
-          //   var cy = self.circles[0][j].getAttribute('cy');
-          //   dataYValues.push([self._pointsToDraw[j][0], self.dims.height - self.dims.margin.bottom +self.dims.margin.top + Number(cy) ]);
-          // }
-
-          // self._calculateDistanceBetweenCurves(self._pointsToDraw, dataYValues);
-
-          var guessPoints = svg.select('.guesspoints');
+          var guessPoints = self.drawArea.selectAll('.guesspoints');
           self._calculateDistanceBetweenCurves(self.circles, guessPoints);
         }
 
@@ -580,18 +571,28 @@ A line chart that the user draws to guess the value.
       // TO DO: d3.inverse - given the pixel it returns data value
       // sum of the square distance between --> Root Mean Square
       // highlight the error area
-      _calculateDistanceBetweenCurves: function(a, b) {
-        var dist = 0;
+      _calculateDistanceBetweenCurves: function(orig, drawn) {
+        var self = this;
+        var a = orig[0];
+        var b = drawn[0];
+        var len = a.length;
 
-        function distance(p1, p2) {
-          return Math.sqrt(Math.pow(p1[0]-p2[0], 2) + Math.pow(p1[1]-p2[1], 2));
+        var diffSum = 0;
+        var diffCount = 0;
+        var diff = 0;
+
+        for (var i = 0; i < len; i++) {
+          var aY = Number( a[i].getAttribute('cy') ) +  self.dims.height-self.dims.margin.top;
+          var bY = Number( b[i].getAttribute('cy') );
+
+          diffSum += Math.pow(aY - bY, 2);
+          diffCount++;
         }
 
-        for (var i = 0; i < a.length; i++) {
-          dist += distance(a[i], b[i]);
-        }
+        // root mean square
+        diff = Math.sqrt( diffSum / diffCount );
 
-        console.log('distance: ' + dist);
+        console.log('diff: ' + diff);
 
       }
 
