@@ -1,16 +1,21 @@
 {
   "name": "lens-viz-draw",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "keywords": "thelma, polymer, web-components",
   "main": "lens-viz-draw.html",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "../",
+    "test",
+    "tests"
+  ],
   "dependencies": {
-    
-    "th-d3-chart": "thelmanews/th-d3-chart#master", 
-    "core-component-page" : "Polymer/core-component-page#^0.5.5",
-    "th-theme": "thelmanews/th-theme#*",
-    "polymer": "Polymer/polymer#~0.5.1"
+    "polymer": "Polymer/polymer#^1.0.0"
   },
   "devDependencies": {
-    "web-component-tester": "Polymer/web-component-tester#^1.4.2"
+    "iron-component-page": "PolymerElements/iron-component-page#^1.0.0",
+    "web-component-tester": "*"
   }
 }

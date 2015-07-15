@@ -3,8 +3,8 @@
   <head>
     <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
     <title>lens-viz-draw Demo</title>
-    <script src="../webcomponentsjs/webcomponents.js"></script>
-    <link rel="import" href="lens-viz-draw.html">
+    <script src="../../webcomponentsjs/webcomponents-lite.js"></script>
+    <link rel="import" href="../lens-viz-draw.html">
 
     <style>
       body {
@@ -25,7 +25,8 @@
         margin: 10px;
         padding: 5px;
         display: block;
-        width: 300px;
+        width: 500px;
+        height: 500px;
       }
 
       .component::before, .component::after {
@@ -53,20 +54,12 @@
 
     </style>
 
-    <script>
-      // helper function to stringify and prettify json
-      PolymerExpressions.prototype.json = function(object) {
-        return JSON.stringify(object, undefined, 2);
-      };
-
-    </script>
-
   </head>
   <body unresolved>
-    <template id="auto-bind-demo" is="auto-binding">
+
       <section>
         <label>Input:</label>
-        <pre id="input">{{myinput | json}}</pre>
+        <pre id="input">{{prettyJSON(myinput)}}</pre>
       </section>
 
 
@@ -75,15 +68,22 @@
           <lens-viz-draw id="component" output="{{myoutput}}" ></lens-viz-draw>
       </section>
 
-      <section>
+<!--       <section>
         <label>Result:</label>
-        <pre id="output">{{myoutput | json}}</pre>
-      </section>
+        <pre id="output">{{prettyJSON(myoutput)}}</pre>
+      </section> -->
 
       <script>
-        var component = document.querySelector('#component');
-    </script>
 
-    </template>
+      window.onload = function() {
+        component = document.querySelector('#component');
+        var preInput = document.getElementById('input');
+        var preOutput = document.getElementById('output');
+
+        preInput.textContent = JSON.stringify(component.input, undefined, 2);
+      }
+
+      </script>
+
   </body>
 </html>
