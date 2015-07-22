@@ -10,10 +10,9 @@ A line chart that the user draws to guess the value.
 @demo
 -->
 
-<dom-module name='lens-viz-draw' attributes="input">
+<dom-module name='lens-viz-draw' attributes="input numberOfDataPoints">
 
   <template>
-    <!-- <core-style ref='theme'></core-style> -->
     <link rel='stylesheet' href='lens-viz-draw.css'>
 
     <div id="lens-viz-container" style="width:100%; height:100%">
@@ -34,83 +33,85 @@ A line chart that the user draws to guess the value.
 
     properties: {
 
+      /**
+       *  Input defaults to an array of objects with Label and Value
+       *  @type Array
+       */
       input: {
-          value: [
-                    {'label': 'Q1 2014', 'value': 34, 'display_value': '$104'},
-                    {'label': 'Q2 2014', 'value': 107, 'display_value': '$107'},
-                    {'label': 'Q3 2014', 'value': 110, 'display_value': '$110'},
-                    {'label': 'Q4 2014', 'value': 112, 'display_value': '$112'},
-                    {'label': 'Q1 2016', 'value': 104, 'display_value': '$104'},
-                    {'label': 'Q1 2017', 'value': 104, 'display_value': '$104'},
-                    {'label': 'Q2 2018', 'value': 107, 'display_value': '$107'},
-                    {'label': 'Q3 2020', 'value': 110, 'display_value': '$110'},
-                    {'label': 'Q4 2022', 'value': 302, 'display_value': '$112'},
-                    {'label': 'Q1 2023', 'value': 30, 'display_value': '$104'},
-                    {'label': 'Q1 2025', 'value': 104, 'display_value': '$104'},
-                    {'label': 'Q2 2030', 'value': 107, 'display_value': '$107'},
-                    {'label': 'Q3 2031', 'value': 110, 'display_value': '$110'},
-                    {'label': 'Q4 2032', 'value': 112, 'display_value': '$112'},
-                    {'label': 'Q1 2053', 'value': 14, 'display_value': '$104'},
-                  ],
-          type: Array,
-          observer: "_inputChanged"
-        },
+        value: [],
+        type: Array,
+        observer: "_inputChanged"
+      },
 
-        dims: {
-          value: {}
-        },
+      /**
+       *  How many data points the user must draw before the data appears.
+       *  By default, this is determined by input data.
+       */
+      numberOfDataPoints: {
+        value: null,
+        type: Number
+      },
 
-        granularity: {},
+      /**
+       *  Color for the actual data
+       *  @type String
+       */
+      dataColor: {
+        value: '#0000ff',
+        type: String
+      },
 
-        color: {
-          value: '#0000ff',
-          type: String
-        },
+      /**
+       *  Color for the user's guess (drawn data)
+       *  @type {Object}
+       */
+      drawColor: {
+        value: 'orange',
+        type: String
+      },
 
-        lineStyle: {
-          value: 'cardinal',
-          type: String
-        },
+      /**
+       *  Line interpolation style
+       */
+      lineStyle: {
+        value: 'cardinal',
+        type: String
+      },
 
-        _drawing: {
-          value: false,
-          type: Boolean
-        },
+      /**
+       *  Is the user drawing?
+       */
+      _drawing: {
+        value: false,
+        type: Boolean
+      },
 
+      /**
+       *  Dimensions
+       *  @type {Object}
+       */
+      _dims: {
+        value: {},
+        type: Object
+      }
 
     },
 
 
     /**
-     * fillArea determines whether the area under the line is filled or not
-     * @type {Boolean}
+     *  The svg chart area, an html element.
      */
-    fillArea: false,
-    /**
-     * valuePosition can be displayed on the 'left' or 'right' of the chart
-     * @type {String}
-     */
-    valuePosition: 'left',
-    /**
-     * tooltips will remove the large value in the background and show small values above each point
-     * @type {Boolean}
-     */
-    tooltips: false,
+    _svg: undefined,
 
-    // drawing vars inspired by 
-    // http://bl.ocks.org/cloudshapes/5661984
-    svg: undefined,
-    ptdata: [],
-
-    // how many divisions - based on input.length
-    granularity: 4,
+    /**
+     *  [_ptdata description]
+     *  @type {Array}
+     */
+    _ptdata: [],
 
 
     attached: function() {
       var self = this;
-
-      // granularity = data point length
-      self.granularity = self.input.length;
 
       // // domReady
       // self.async(function() {
@@ -130,7 +131,7 @@ A line chart that the user draws to guess the value.
     _setupElement: function() {
       var self = this;
       var data = self.input;
-      var svg = self.svg = d3.select(self.$.chart);
+      var svg = self._svg = d3.select(self.$.chart);
 
       var bcRect = svg.node().parentNode.getBoundingClientRect()
       var margin = {top: 30, right: 10, bottom: 30, left: 10},
@@ -144,10 +145,10 @@ A line chart that the user draws to guess the value.
           percent = d3.format('%');
 
       // save for later...
-      self.dims.margin = margin;
-      self.dims.width = width;
-      self.dims.height = height;
-      self.dims.padding = padding;
+      self._dims.margin = margin;
+      self._dims.width = width;
+      self._dims.height = height;
+      self._dims.padding = padding;
 
       svg.attr('width', outerWidth)
       svg.attr('height', outerHeight)
@@ -163,7 +164,7 @@ A line chart that the user draws to guess the value.
       self.x.domain(self.input.map(function(d,i){return d.label}));
 
       // x index maps an x point to an index, for drawing
-      self.xIndex = d3.scale.linear().domain([margin.left, width]).range([0, self.granularity -1]).clamp(true);
+      self.xIndex = d3.scale.linear().domain([margin.left, width]).range([0, self.numberOfDataPoints -1]).clamp(true);
 
 
       var xAxis = d3.svg.axis()
@@ -219,8 +220,8 @@ A line chart that the user draws to guess the value.
         .append('circle')
         .attr('class', 'circle data0')
           .attr('r', 0)
-          .style('fill', self.color)
-          .style('stroke', self.color)
+          .style('fill', self.dataColor)
+          .style('stroke', self.dataColor)
           .attr('cx', function(d,i) { return  x(d.label); })
           .attr('cy', function(d) { return y(d.value); });
 
@@ -254,7 +255,7 @@ A line chart that the user draws to guess the value.
           .attr('class', 'line data0 no-fill')
           .attr('stroke-width', '3')
           .style('fill', 'none')
-          .style('stroke', self.color);
+          .style('stroke', self.dataColor);
 
       // Show datapoints
       self.circles
@@ -270,6 +271,10 @@ A line chart that the user draws to guess the value.
      */
     _inputChanged: function() {
       var self = this;
+
+      // set numberOfDataPoints to draw based on input data
+      self.numberOfDataPoints = self.numberOfDataPoints || self.input.length;
+
       self._findMinMax();
 
       self._clear();
@@ -297,11 +302,18 @@ A line chart that the user draws to guess the value.
     // =============
     // drawing stuff
     // =============
+
+    /**
+     *  Set up the drawArea, append it to an SVG,
+     *  and add event listeners to start and end drawing.
+     *  
+     *  @private
+     */
     _setupDrawing: function() {
       var self = this;
 
       // draw area g
-      self.drawArea = self.svg.append('g')
+      self.drawArea = self._svg.append('g')
         .attr('class', 'drawarea');
 
       self.drawnLine = d3.svg.line()
@@ -309,46 +321,62 @@ A line chart that the user draws to guess the value.
         .x(function(d, i) { return d[0]; })
         .y(function(d, i) { return d[1]; });
 
-      self.drawnPath = self.svg.select('g')
+      self.drawnPath = self._svg.select('g')
         .append("path");
 
 
       // TO DO: d3.behavior.drag() would be cleaner but throws
       // Uncaught TypeError: n.getBoundingClientRect is not a function
-      self.svg.on('mousedown', function(e) {self._startDraw()});
-      self.svg.on('mouseup', function(e) {self._endDraw()});
-      self.svg.on('mouseleave', function(e) {self._endDraw()});
+      self._svg.on('mousedown', function(e) {self._startDraw()});
+      self._svg.on('mouseup', function(e) {self._endDraw()});
+      self._svg.on('mouseleave', function(e) {self._endDraw()});
 
     },
 
+    /**
+     *  start drawing on mousedown
+     *  
+     *  @private
+     */
     _startDraw: function() {
       var self = this;
       self._clearText();
       self._drawing = true;
       self._drawPoints();
-      self.svg.on('mousemove', self._drawPoints.bind(self));
+      self._svg.on('mousemove', self._drawPoints.bind(self));
     },
 
+    /**
+     *  end draw on mouseup or mouseleave
+     *  
+     *  @private
+     */
     _endDraw: function() {
       var self = this;
       self._drawing = false;
-      self.svg.on('mousemove', '');
+      self._svg.on('mousemove', '');
     },
 
+    /**
+     *  Display all of the points (guesspoints) that the user has drawn so far,
+     *  and draw lines between them. If all points have been drawn, reveal the real data.
+     *  
+     *  @private
+     */
     _drawPoints: function() {
       var self = this;
       var pt = d3.mouse(self);
 
       var pointIndex = Math.round( self.xIndex(pt[0]) );
 
-      var distBetwPoints = (self.dims.width - self.dims.margin.left) / (self.granularity - 1);
+      var distBetwPoints = (self._dims.width - self._dims.margin.left) / (self.numberOfDataPoints - 1);
 
-      var xPos = pointIndex * distBetwPoints + self.dims.margin.left + self.dims.padding;
+      var xPos = pointIndex * distBetwPoints + self._dims.margin.left + self._dims.padding;
       var newPoint = [xPos, pt[1]];
-      self.ptdata[pointIndex] = newPoint;
+      self._ptdata[pointIndex] = newPoint;
 
       // only draw points if they are defined
-      var pointsToDraw = self.ptdata.filter(function(i, e) {
+      var pointsToDraw = self._ptdata.filter(function(i, e) {
         return i;
       });
 
@@ -362,7 +390,7 @@ A line chart that the user draws to guess the value.
         .append('path')
           .attr('class', 'line data0 no-fill')
           .attr('d', self.drawnLine)
-          .style('stroke', 'orange')
+          .style('stroke', self.drawColor)
           .attr('stroke-width', '3')
           .attr('fill', 'none');
 
@@ -374,14 +402,14 @@ A line chart that the user draws to guess the value.
         .selectAll('.guesspoints')
         .data(pointsToDraw)
         .enter().append('circle')
-          .attr("class", 'guesspoints')
-          .attr("r", 5)
-          .attr("fill", 'orange')
-          .attr("cx", function(d, i) { return d[0] })
-          .attr("cy", function(d, i) { return d[1] });
+          .attr('class', 'guesspoints')
+          .attr('r', 5)
+          .attr('fill', self.drawColor)
+          .attr('cx', function(d, i) { return d[0] })
+          .attr('cy', function(d, i) { return d[1] });
 
       // if all the points have been drawn, animate and calculate distance / score
-      if (pointsToDraw.length === self.granularity) {
+      if (pointsToDraw.length === self.numberOfDataPoints) {
         self._reveal();
 
         var guessPoints = self.drawArea.selectAll('.guesspoints');
@@ -392,6 +420,17 @@ A line chart that the user draws to guess the value.
 
     // TO DO:
     // highlight the error area
+
+    /**
+     *  Calculate the distance between two datasets.
+     *  Accepts two arrays of d3 selections / SVG elements that have cx and cy attributes
+     *  
+     *  @param   {Array} orig  Array of SVG elements with cx and cy attributes (i.e. circles)
+     *  @param   {Array} drawn Array of SVG elements with cx and cy attributes (i.e. circles)
+     *
+     *  @return {Number} diff   The difference between the two paths
+     *  @private
+     */
     _calculateDistanceBetweenCurves: function(orig, drawn) {
       var self = this;
       var a = orig[0];
@@ -403,7 +442,7 @@ A line chart that the user draws to guess the value.
       var diff = 0;
 
       for (var i = 0; i < len; i++) {
-        var aY = Number( a[i].getAttribute('cy') ) + self.dims.margin.top;
+        var aY = Number( a[i].getAttribute('cy') ) + self._dims.margin.top;
         var bY = Number( b[i].getAttribute('cy') );
         var y = self.y.invert;
         diffSum += Math.pow( y(aY) - y(bY), 2);
@@ -417,14 +456,51 @@ A line chart that the user draws to guess the value.
 
     },
 
+    /**
+     *  Remove all SVG data (actual data, drawn data, and text)
+     *  
+     *  @private
+     */
     _clear: function() {
       var self = this;
-      self.ptdata = [];
+      self._ptdata = [];
       self._clearText();
       if (self.g) self.g.remove();
       if (self.drawArea) self.drawArea.remove();
     },
 
+    /**
+     *  Fade in text to display on the middle of the SVG
+     *  
+     *  @param   {String} txt Some text to display
+     *  
+     *  @private
+     */
+    _revealText: function(txt) {
+      var self = this;
+
+      var msg = d3.select('#msg');
+      if (!msg[0][0]) {
+        // init text
+        self.msg = self._svg.append('text')
+          .attr('id', 'msg')
+          .attr('x', self._dims.width/2)
+          .attr('y', self._dims.height/2)
+          .attr('text-anchor', 'middle')
+          .attr('opacity', 0)
+      }
+
+      self.msg.text( txt )
+        .transition()
+          .duration(900)
+          .attr('opacity', 1);
+    },
+
+    /**
+     *  Fade out any text from the middle of the SVG
+     *  
+     *  @private
+     */
     _clearText: function() {
       var self = this;
 
@@ -442,26 +518,9 @@ A line chart that the user draws to guess the value.
 
     },
 
-    _revealText: function(txt) {
-      var self = this;
-
-      var msg = d3.select('#msg');
-      if (!msg[0][0]) {
-        // init text
-        self.msg = self.svg.append('text')
-          .attr('id', 'msg')
-          .attr('x', self.dims.width/2)
-          .attr('y', self.dims.height/2)
-          .attr('text-anchor', 'middle')
-          .attr('opacity', 0)
-      }
-
-      self.msg.text( txt )
-        .transition()
-          .duration(900)
-          .attr('opacity', 1);
-    },
-
+    /**
+     *  Resize element
+     */
     resize: function() {
       var self = this;
       self._clear();
