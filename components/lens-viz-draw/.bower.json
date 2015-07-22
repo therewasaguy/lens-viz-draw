@@ -1,0 +1,32 @@
+{
+  "name": "lens-viz-draw",
+  "keywords": "thelma, polymer, web-components",
+  "main": "lens-viz-draw.html",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "../",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "polymer": "Polymer/polymer#^1.0.0",
+    "iron-component-page": "PolymerElements/iron-component-page#^1.0.0",
+    "d3": "~3.5.6"
+  },
+  "devDependencies": {
+    "web-component-tester": "*"
+  },
+  "homepage": "https://github.com/therewasaguy/lens-viz-draw",
+  "_release": "aac94603b6",
+  "_resolution": {
+    "type": "branch",
+    "branch": "master",
+    "commit": "aac94603b6778783f564a5afdbcba3f14316cf29"
+  },
+  "_source": "git://github.com/therewasaguy/lens-viz-draw.git",
+  "_target": "master",
+  "_originalSource": "therewasaguy/lens-viz-draw",
+  "_direct": true
+}

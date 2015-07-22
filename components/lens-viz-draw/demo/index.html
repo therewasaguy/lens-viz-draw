@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+    <title>lens-viz-draw Demo</title>
+    <script src="../../webcomponentsjs/webcomponents-lite.js"></script>
+    <link rel="import" href="../lens-viz-draw.html">
+
+    <style>
+      body {
+        font-family: sans-serif;
+        font-size: 14px;
+      }
+
+      pre {
+        border: 1px solid #EEE;
+        font-size: 12px;
+        max-width: 300px;
+        max-height: 300px;
+        overflow: scroll;
+
+      }
+      #component {
+        border: 1px solid #BBB;
+        margin: 10px;
+        padding: 5px;
+        display: block;
+        width: 500px;
+        height: 500px;
+      }
+
+      .component::before, .component::after {
+        content: '\2794';
+        position: absolute;
+        top: 50%;
+      }
+      .component::before {
+        right: -15px;
+      }
+
+      .component::after {
+        left: -15px;
+      }
+
+      section {
+        display: inline-block;
+        margin: 8px;
+        vertical-align: top;
+        position: relative;
+      }
+      html /deep/ input[is=core-input] {
+        border-bottom: 1px solid #E5E5E5 !important;
+      }
+
+    </style>
+
+  </head>
+  <body unresolved>
+
+      <section>
+        <label>Input:</label>
+        <pre id="input">{{prettyJSON(myinput)}}</pre>
+      </section>
+
+
+      <section class="component">
+        <label>An example of lens-viz-draw:</label>
+          <lens-viz-draw id="component" output="{{myoutput}}" ></lens-viz-draw>
+      </section>
+
+<!--       <section>
+        <label>Result:</label>
+        <pre id="output">{{prettyJSON(myoutput)}}</pre>
+      </section> -->
+
+      <script>
+
+      window.onload = function() {
+        component = document.querySelector('#component');
+        var preInput = document.getElementById('input');
+        var preOutput = document.getElementById('output');
+
+        preInput.textContent = JSON.stringify(component.input, undefined, 2);
+      }
+
+      </script>
+
+  </body>
+</html>

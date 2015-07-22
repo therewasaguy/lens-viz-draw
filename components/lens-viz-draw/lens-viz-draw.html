@@ -1,0 +1,472 @@
+<link rel='import' href='../polymer/polymer.html'> 
+
+<!--
+A line chart that the user draws to guess the value.
+
+##### Example
+
+    <lens-viz-draw></lens-viz-draw>
+
+@demo
+-->
+
+<dom-module name='lens-viz-draw' attributes="input">
+
+  <template>
+    <!-- <core-style ref='theme'></core-style> -->
+    <link rel='stylesheet' href='lens-viz-draw.css'>
+
+    <div id="lens-viz-container" style="width:100%; height:100%">
+      <svg id='chart'></svg> 
+    </div>
+
+  </template>
+
+</dom-module>
+
+
+<script type="text/javascript" src="../d3/d3.min.js"></script>
+
+<script>
+  Polymer({
+
+    is: 'lens-viz-draw',
+
+    properties: {
+
+      input: {
+          value: [
+                    {'label': 'Q1 2014', 'value': 34, 'display_value': '$104'},
+                    {'label': 'Q2 2014', 'value': 107, 'display_value': '$107'},
+                    {'label': 'Q3 2014', 'value': 110, 'display_value': '$110'},
+                    {'label': 'Q4 2014', 'value': 112, 'display_value': '$112'},
+                    {'label': 'Q1 2016', 'value': 104, 'display_value': '$104'},
+                    {'label': 'Q1 2017', 'value': 104, 'display_value': '$104'},
+                    {'label': 'Q2 2018', 'value': 107, 'display_value': '$107'},
+                    {'label': 'Q3 2020', 'value': 110, 'display_value': '$110'},
+                    {'label': 'Q4 2022', 'value': 302, 'display_value': '$112'},
+                    {'label': 'Q1 2023', 'value': 30, 'display_value': '$104'},
+                    {'label': 'Q1 2025', 'value': 104, 'display_value': '$104'},
+                    {'label': 'Q2 2030', 'value': 107, 'display_value': '$107'},
+                    {'label': 'Q3 2031', 'value': 110, 'display_value': '$110'},
+                    {'label': 'Q4 2032', 'value': 112, 'display_value': '$112'},
+                    {'label': 'Q1 2053', 'value': 14, 'display_value': '$104'},
+                  ],
+          type: Array,
+          observer: "_inputChanged"
+        },
+
+        dims: {
+          value: {}
+        },
+
+        granularity: {},
+
+        color: {
+          value: '#0000ff',
+          type: String
+        },
+
+        lineStyle: {
+          value: 'cardinal',
+          type: String
+        },
+
+        _drawing: {
+          value: false,
+          type: Boolean
+        },
+
+
+    },
+
+
+    /**
+     * fillArea determines whether the area under the line is filled or not
+     * @type {Boolean}
+     */
+    fillArea: false,
+    /**
+     * valuePosition can be displayed on the 'left' or 'right' of the chart
+     * @type {String}
+     */
+    valuePosition: 'left',
+    /**
+     * tooltips will remove the large value in the background and show small values above each point
+     * @type {Boolean}
+     */
+    tooltips: false,
+
+    // drawing vars inspired by 
+    // http://bl.ocks.org/cloudshapes/5661984
+    svg: undefined,
+    ptdata: [],
+
+    // how many divisions - based on input.length
+    granularity: 4,
+
+
+    attached: function() {
+      var self = this;
+
+      // granularity = data point length
+      self.granularity = self.input.length;
+
+      // // domReady
+      // self.async(function() {
+      //   self._setupElement();
+      //   self._setupDrawing();
+      // }, 1);
+
+
+      // Setup elements and sizes
+      // self._setupElements();
+      // self._setElementSizes();
+
+      // self._populatePtdata();
+    },
+
+    // via http://eyeseast.github.io/visible-data/2013/08/28/responsive-charts-with-d3/
+    _setupElement: function() {
+      var self = this;
+      var data = self.input;
+      var svg = self.svg = d3.select(self.$.chart);
+
+      var bcRect = svg.node().parentNode.getBoundingClientRect()
+      var margin = {top: 30, right: 10, bottom: 30, left: 10},
+          padding = 10,
+          outerWidth = parseInt(bcRect.width, 10),
+          outerHeight = parseInt(bcRect.height, 10),
+          innerWidth = outerWidth - margin.left - margin.right,
+          innerHeight = outerHeight - margin.top - margin.bottom,
+          width = innerWidth - padding - padding,
+          height = innerHeight - padding - padding,
+          percent = d3.format('%');
+
+      // save for later...
+      self.dims.margin = margin;
+      self.dims.width = width;
+      self.dims.height = height;
+      self.dims.padding = padding;
+
+      svg.attr('width', outerWidth)
+      svg.attr('height', outerHeight)
+
+      self._revealText('Draw your best guess');
+
+      // Set y-scale
+      var y = self.y = d3.scale.linear().domain([self.maxValue, self.minValue]).range([margin.top, 
+              (height-(margin.top + margin.bottom))]);
+      
+      // Set x-scale
+      var x = self.x = d3.scale.ordinal().rangePoints([margin.left, width], 0);
+      self.x.domain(self.input.map(function(d,i){return d.label}));
+
+      // x index maps an x point to an index, for drawing
+      self.xIndex = d3.scale.linear().domain([margin.left, width]).range([0, self.granularity -1]).clamp(true);
+
+
+      var xAxis = d3.svg.axis()
+          .scale(x)
+          .tickSize(0)
+          .orient('bottom');
+
+      var yAxis = d3.svg.axis()
+          .scale(y)
+          .orient('right');
+
+      var g = self.g = svg.append('g')
+        .attr('transform', 'translate('+margin.left + "," + margin.top + ")");
+
+      g.append('g')
+          .attr('class', 'axis xAxis fill-foreground')
+          .attr('transform', 'translate(' +padding +', '+ (height-2*padding) +')')
+          .call(xAxis)
+            .selectAll('text')
+              .style('text-anchor', 'end')
+              .attr('dx', '-.8em')
+              .attr('dy', '.15em')
+              .attr('transform', function(d) {
+                return 'rotate(-70)'
+              });
+
+      g.append('g')
+          .attr('class', 'y xAxis')
+          .attr('transform', 'translate('+width +', 0)')
+          .call(yAxis);
+
+
+      // line path
+      self.linePath = g.append('path').data(data)
+          .attr('class', 'line data0 no-fill')
+          .attr('opacity', 0);
+
+      // Line data, ending state (raise style animation)
+      self.line = d3.svg.line()
+        .x(function(d,i) { return x(d.label); })
+        .y(function(d) { return y(d.value); })
+        .interpolate(self.lineStyle);
+
+      // data points
+      self.datapoints = g.selectAll('.datapoint')
+        .data(data)
+        .enter().append('g')
+        .attr('class', 'datapoint data0')
+        .attr('cx', function(d,i) { return  x(d.label); })
+        .attr('cy', function(d) { return y(d.value); });
+
+      self.circles = self.datapoints
+        .append('circle')
+        .attr('class', 'circle data0')
+          .attr('r', 0)
+          .style('fill', self.color)
+          .style('stroke', self.color)
+          .attr('cx', function(d,i) { return  x(d.label); })
+          .attr('cy', function(d) { return y(d.value); });
+
+      self.circleAreas = self.datapoints
+        .append('circle')
+        .attr('class', 'circleArea')
+        .attr('r', 25)
+        .attr('opacity', 0)
+        .attr('cx', function(d,i) { return  x(d.label); })
+        .attr('cy', function(d) { return y(d.value); });
+
+    },
+
+
+    /**
+     *  reveal the actual data
+     *  
+     *  @method _reveal
+     *  @private
+     */
+    _reveal: function() {
+      var self = this;
+      var data = self.input;
+
+      // animate
+      self.linePath
+        .transition()
+          .duration(900)
+          .attr('d', self.line(data))
+          .attr('opacity', 1)
+          .attr('class', 'line data0 no-fill')
+          .attr('stroke-width', '3')
+          .style('fill', 'none')
+          .style('stroke', self.color);
+
+      // Show datapoints
+      self.circles
+        .transition().delay(650).duration(500)
+          .attr('r', 5);
+    },
+
+    /**
+     *  Observer for self.input. Recalculates the min/max and 
+     *  
+     *  @method _inputChanged
+     *  @private
+     */
+    _inputChanged: function() {
+      var self = this;
+      self._findMinMax();
+
+      self._clear();
+
+      // domReady
+      self.async(function() {
+        self._setupElement();
+        self._setupDrawing();
+      }, 1);
+
+    },
+
+    _findMinMax: function() {
+      var self = this;
+
+      // find min and max values
+      var values = self.input.map(function(i, e) {
+        return i.value});
+      self.maxValue = Math.max.apply(Math, values);
+      self.minValue = Math.min.apply(Math, values);
+
+    },
+
+
+    // =============
+    // drawing stuff
+    // =============
+    _setupDrawing: function() {
+      var self = this;
+
+      // draw area g
+      self.drawArea = self.svg.append('g')
+        .attr('class', 'drawarea');
+
+      self.drawnLine = d3.svg.line()
+        .interpolate(self.lineStyle)
+        .x(function(d, i) { return d[0]; })
+        .y(function(d, i) { return d[1]; });
+
+      self.drawnPath = self.svg.select('g')
+        .append("path");
+
+
+      // TO DO: d3.behavior.drag() would be cleaner but throws
+      // Uncaught TypeError: n.getBoundingClientRect is not a function
+      self.svg.on('mousedown', function(e) {self._startDraw()});
+      self.svg.on('mouseup', function(e) {self._endDraw()});
+      self.svg.on('mouseleave', function(e) {self._endDraw()});
+
+    },
+
+    _startDraw: function() {
+      var self = this;
+      self._clearText();
+      self._drawing = true;
+      self._drawPoints();
+      self.svg.on('mousemove', self._drawPoints.bind(self));
+    },
+
+    _endDraw: function() {
+      var self = this;
+      self._drawing = false;
+      self.svg.on('mousemove', '');
+    },
+
+    _drawPoints: function() {
+      var self = this;
+      var pt = d3.mouse(self);
+
+      var pointIndex = Math.round( self.xIndex(pt[0]) );
+
+      var distBetwPoints = (self.dims.width - self.dims.margin.left) / (self.granularity - 1);
+
+      var xPos = pointIndex * distBetwPoints + self.dims.margin.left + self.dims.padding;
+      var newPoint = [xPos, pt[1]];
+      self.ptdata[pointIndex] = newPoint;
+
+      // only draw points if they are defined
+      var pointsToDraw = self.ptdata.filter(function(i, e) {
+        return i;
+      });
+
+      // clear drawnPath before redrawing it
+      self.drawnPath.remove();
+
+      self.drawnPath = self.drawArea
+        .selectAll('.pathPoints')
+        .data([pointsToDraw])
+        .enter()
+        .append('path')
+          .attr('class', 'line data0 no-fill')
+          .attr('d', self.drawnLine)
+          .style('stroke', 'orange')
+          .attr('stroke-width', '3')
+          .attr('fill', 'none');
+
+      if (self.guesspoints) {
+        self.guesspoints.remove();
+      }
+
+      self.guesspoints = self.drawArea
+        .selectAll('.guesspoints')
+        .data(pointsToDraw)
+        .enter().append('circle')
+          .attr("class", 'guesspoints')
+          .attr("r", 5)
+          .attr("fill", 'orange')
+          .attr("cx", function(d, i) { return d[0] })
+          .attr("cy", function(d, i) { return d[1] });
+
+      // if all the points have been drawn, animate and calculate distance / score
+      if (pointsToDraw.length === self.granularity) {
+        self._reveal();
+
+        var guessPoints = self.drawArea.selectAll('.guesspoints');
+        var diff = self._calculateDistanceBetweenCurves(self.circles, guessPoints);
+        self._revealText("You were off by " + diff);
+      }
+    },
+
+    // TO DO:
+    // highlight the error area
+    _calculateDistanceBetweenCurves: function(orig, drawn) {
+      var self = this;
+      var a = orig[0];
+      var b = drawn[0];
+      var len = a.length;
+
+      var diffSum = 0;
+      var diffCount = 0;
+      var diff = 0;
+
+      for (var i = 0; i < len; i++) {
+        var aY = Number( a[i].getAttribute('cy') ) + self.dims.margin.top;
+        var bY = Number( b[i].getAttribute('cy') );
+        var y = self.y.invert;
+        diffSum += Math.pow( y(aY) - y(bY), 2);
+        diffCount++;
+      }
+
+      // root mean square
+      diff = Math.sqrt( diffSum / diffCount );
+
+      return diff;
+
+    },
+
+    _clear: function() {
+      var self = this;
+      self.ptdata = [];
+      self._clearText();
+      if (self.g) self.g.remove();
+      if (self.drawArea) self.drawArea.remove();
+    },
+
+    _clearText: function() {
+      var self = this;
+
+      var msg = d3.select('#msg');
+      if (msg[0] === null) {
+        return;
+      }
+
+      if (msg) {
+        msg.transition()
+          .duration(900)
+          .attr('opacity', 0)
+          .remove();
+      }
+
+    },
+
+    _revealText: function(txt) {
+      var self = this;
+
+      var msg = d3.select('#msg');
+      if (!msg[0][0]) {
+        // init text
+        self.msg = self.svg.append('text')
+          .attr('id', 'msg')
+          .attr('x', self.dims.width/2)
+          .attr('y', self.dims.height/2)
+          .attr('text-anchor', 'middle')
+          .attr('opacity', 0)
+      }
+
+      self.msg.text( txt )
+        .transition()
+          .duration(900)
+          .attr('opacity', 1);
+    },
+
+    resize: function() {
+      var self = this;
+      self._clear();
+      self._setupElement();
+    },
+
+  });
+</script>
