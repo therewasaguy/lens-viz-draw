@@ -372,7 +372,14 @@ A line chart that the user draws to guess the value.
       var distBetwPoints = (self._dims.width - self._dims.margin.left) / (self.numberOfDataPoints - 1);
 
       var xPos = pointIndex * distBetwPoints + self._dims.margin.left + self._dims.padding;
-      var newPoint = [xPos, pt[1]];
+
+      // limit range of xPos to account for dims.padding and margin
+      var yClamp = d3.scale.linear()
+        .domain([self._dims.margin.top + self._dims.padding, self._dims.height - self._dims.padding])
+        .range([self._dims.margin.top + self._dims.padding, self._dims.height - self._dims.padding])
+        .clamp(true);
+
+      var newPoint = [xPos, yClamp( pt[1] )];
       self._ptdata[pointIndex] = newPoint;
 
       // only draw points if they are defined
