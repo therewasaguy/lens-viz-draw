@@ -174,7 +174,7 @@ A line chart that the user draws to guess the value.
 
       var yAxis = d3.svg.axis()
           .scale(y)
-          .orient('right');
+          .orient('left');
 
       var g = self.g = svg.append('g')
         .attr('transform', 'translate('+margin.left + "," + margin.top + ")");
@@ -192,8 +192,8 @@ A line chart that the user draws to guess the value.
               });
 
       g.append('g')
-          .attr('class', 'y xAxis')
-          .attr('transform', 'translate('+width +', 0)')
+          .attr('class', 'y yAxis')
+          .attr('transform', 'translate('+ (width + padding) +', 0)')
           .call(yAxis);
 
 
@@ -421,7 +421,7 @@ A line chart that the user draws to guess the value.
 
         var guessPoints = self.drawArea.selectAll('.guesspoints');
         var diff = self._calculateDistanceBetweenCurves(self.circles, guessPoints);
-        self._revealText("You were off by " + diff);
+        self._revealText("You were off by " + diff.toFixed(2), 30, 30, 'left');
       }
     },
 
@@ -432,8 +432,8 @@ A line chart that the user draws to guess the value.
      *  Calculate the distance between two datasets.
      *  Accepts two arrays of d3 selections / SVG elements that have cx and cy attributes
      *  
-     *  @param   {Array} orig  Array of SVG elements with cx and cy attributes (i.e. circles)
-     *  @param   {Array} drawn Array of SVG elements with cx and cy attributes (i.e. circles)
+     *  @param   {Array<SVGElements>} orig  Array of SVG elements with cx and cy attributes (i.e. circles)
+     *  @param   {Array<SVGElements>} drawn Array of SVG elements with cx and cy attributes (i.e. circles)
      *
      *  @return {Number} diff   The difference between the two paths
      *  @private
@@ -480,20 +480,27 @@ A line chart that the user draws to guess the value.
      *  Fade in text to display on the middle of the SVG
      *  
      *  @param   {String} txt Some text to display
+     *  @param   {Number} x x position of the text (optional)
+     *  @param   {Number} y y position of the text (optional)
+     *  @param   {String} [anchor] anchor text position to 'left' 'right or 'middle' (optional)
      *  
      *  @private
      */
-    _revealText: function(txt) {
+    _revealText: function(txt, x, y, anchor) {
       var self = this;
+      var _x = x || self._dims.width/2;
+      var _y = y || self._dims.height/2;
+      var _anchor = anchor || 'middle';
 
       var msg = d3.select('#msg');
+
       if (!msg[0][0]) {
         // init text
         self.msg = self._svg.append('text')
           .attr('id', 'msg')
-          .attr('x', self._dims.width/2)
-          .attr('y', self._dims.height/2)
-          .attr('text-anchor', 'middle')
+          .attr('x', _x)
+          .attr('y', _y)
+          .attr('text-anchor', _anchor)
           .attr('opacity', 0)
       }
 
