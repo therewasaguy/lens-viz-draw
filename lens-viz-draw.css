@@ -15,3 +15,5 @@
 .tip {
   font-weight: 400;
 }
+
+svg text::selection { background: none; }
